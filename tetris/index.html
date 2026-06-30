@@ -115,6 +115,10 @@
       body {
         justify-content: flex-start;
         padding-top: 14px;
+        min-height: unset;
+        height: 100vh;
+        height: 100svh;
+        overflow: hidden;
       }
 
       h1 {
@@ -313,11 +317,18 @@
 
     function computeBS() {
       if (window.innerWidth >= 560) return 30;
-      const bsW     = Math.floor((window.innerWidth - 24) / COLS);
-      // Subtract approximate mobile UI height: info-bar + touch-ctrls + padding (+ h1 if visible)
-      const overhead = inPopup ? 185 : 225;
-      const bsH     = Math.floor((window.innerHeight - overhead) / ROWS);
-      return Math.max(Math.min(bsW, bsH, 30), 16);
+      const bsW = Math.floor((window.innerWidth - 24) / COLS);
+      // visualViewport.height = 実際に見える高さ（iOS Safari の URL バー分を正確に除外）
+      const vh  = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      // DOM から各 UI 要素の実測値を取得してオーバーヘッドを算出
+      const h1El   = document.querySelector('h1');
+      const infoEl = document.querySelector('.m-info');
+      const ctrlEl = document.querySelector('.t-ctrls');
+      const h1H    = inPopup ? 0 : ((h1El ? h1El.offsetHeight : 28) + 8);
+      const infoH  = infoEl ? infoEl.offsetHeight : 52;
+      const ctrlH  = ctrlEl ? ctrlEl.offsetHeight : 120;
+      const bsH    = Math.floor((vh - 14 - h1H - infoH - ctrlH - 6) / ROWS);
+      return Math.max(Math.min(bsW, bsH, 30), 14);
     }
 
     // ── Canvases ─────────────────────────────────────────────
@@ -728,11 +739,13 @@
     document.getElementById('startBtn').addEventListener('click', startGame);
     bindTap('tStart', startGame);
 
-    // ── Resize (orientation change) ────────────────────────────
-    window.addEventListener('resize', () => {
+    // ── Resize / visualViewport change ────────────────────────
+    function handleResize() {
       setupSizes();
       if (!gameRunning) drawInitialScreen();
-    });
+    }
+    window.addEventListener('resize', handleResize);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', handleResize);
 
     // ── Initial screen ─────────────────────────────────────────
     function drawInitialScreen() {
