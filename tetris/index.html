@@ -107,6 +107,22 @@
     #startBtn:hover  { background: #c0304e; }
     #startBtn:active { transform: scale(0.97); }
 
+    #bgmBtn {
+      width: 100%;
+      padding: 8px;
+      background: #161630;
+      color: #00f0f0;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: background 0.2s;
+    }
+    #bgmBtn:hover  { background: #1e1e40; }
+    #bgmBtn.muted  { color: #445; }
+
     /* ── Mobile only ─────────────────────── */
     .m-info  { display: none; }
     .t-ctrls { display: none; }
@@ -283,6 +299,7 @@
         <kbd>Space</kbd> 即落下<br>
         <kbd>P</kbd> 一時停止
       </div>
+      <button id="bgmBtn">♪ BGM</button>
       <button id="startBtn">スタート</button>
     </div>
   </div>
@@ -298,7 +315,8 @@
     <div class="t-row">
       <button class="t-btn sm" id="tDown">↓ FAST</button>
       <button class="t-btn start" id="tStart">START</button>
-      <button class="t-btn sm" id="tPause">⏸ PAUSE</button>
+      <button class="t-btn sm" id="tBgm">♪</button>
+      <button class="t-btn sm" id="tPause">⏸</button>
     </div>
   </div>
 
@@ -306,6 +324,95 @@
     const COLS = 10, ROWS = 20;
     const CLEAR_ANIM_FRAMES = 22;
     const FAST_DROP_ROWS    = 2;
+
+    // ── BGM (Web Audio API) ───────────────────────────────────
+    const BGM_FREQ = {
+      'A4':440.00,'B4':493.88,
+      'C5':523.25,'D5':587.33,'E5':659.25,'F5':698.46,'G5':783.99,'A5':880.00,
+    };
+    // テトリス A テーマ（コロベイニキ）/ 1 unit = 1/8 音符
+    const BGM_SEQ = [
+      ['E5',2],['B4',1],['C5',1],['D5',2],['C5',1],['B4',1],
+      ['A4',2],['A4',1],['C5',1],['E5',2],['D5',1],['C5',1],
+      ['B4',3],['C5',1],['D5',2],['E5',2],
+      ['C5',2],['A4',2],['A4',4],
+      ['D5',3],['F5',1],['A5',2],['G5',1],['F5',1],
+      ['E5',3],['C5',1],['E5',2],['D5',1],['C5',1],
+      ['B4',2],['B4',1],['C5',1],['D5',2],['E5',2],
+      ['C5',2],['A4',2],['A4',4],
+    ];
+    const BGM_UNIT  = 0.125; // 秒 / 1/8 音符 (= 120 BPM)
+    const BGM_TOTAL = BGM_SEQ.reduce((s, [, b]) => s + b * BGM_UNIT, 0);
+
+    let audioCtx  = null;
+    let bgmOn     = false; // ゲームが BGM を再生したい状態か
+    let bgmMuted  = false; // ユーザーがミュートしているか
+    let bgmLoopId = null;
+
+    function audioInit() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function bgmNote(freq, t, dur) {
+      const osc = audioCtx.createOscillator();
+      const env = audioCtx.createGain();
+      osc.connect(env); env.connect(audioCtx.destination);
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, t);
+      env.gain.setValueAtTime(0.06, t);
+      env.gain.exponentialRampToValueAtTime(0.001, t + dur * 0.88);
+      osc.start(t); osc.stop(t + dur);
+    }
+
+    function bgmSchedule() {
+      if (!bgmOn || bgmMuted || !audioCtx) return;
+      let t = audioCtx.currentTime + 0.05;
+      for (const [note, beats] of BGM_SEQ) {
+        const dur = beats * BGM_UNIT;
+        if (BGM_FREQ[note]) bgmNote(BGM_FREQ[note], t, dur);
+        t += dur;
+      }
+      bgmLoopId = setTimeout(bgmSchedule, (BGM_TOTAL - 0.2) * 1000);
+    }
+
+    function bgmStart() {
+      audioInit();
+      clearTimeout(bgmLoopId);
+      bgmOn = true;
+      bgmSchedule();
+    }
+
+    function bgmStop() {
+      bgmOn = false;
+      clearTimeout(bgmLoopId);
+      if (audioCtx) audioCtx.suspend();
+    }
+
+    function bgmPause() {
+      clearTimeout(bgmLoopId);
+      if (audioCtx) audioCtx.suspend();
+    }
+
+    function bgmResume() {
+      if (!bgmOn || bgmMuted) return;
+      audioInit();
+      bgmSchedule();
+    }
+
+    function bgmToggle() {
+      bgmMuted = !bgmMuted;
+      const d = document.getElementById('bgmBtn');
+      const m = document.getElementById('tBgm');
+      if (d) { d.textContent = bgmMuted ? '🔇 BGM' : '♪ BGM'; d.classList.toggle('muted', bgmMuted); }
+      if (m) m.textContent = bgmMuted ? '🔇' : '♪';
+      if (bgmMuted) {
+        clearTimeout(bgmLoopId);
+        if (audioCtx) audioCtx.suspend();
+      } else if (bgmOn) {
+        bgmResume();
+      }
+    }
 
     // ── iframe detection ─────────────────────────────────────
     let inPopup = false;
@@ -378,6 +485,7 @@
       fastDropping = false; clearAnim = null;
       current = spawnPiece(); next = spawnPiece();
       updateHUD();
+      bgmStart();
     }
 
     function spawnPiece() {
@@ -533,6 +641,7 @@
         }
         rafId = requestAnimationFrame(animateEnd);
       }
+      bgmStop();
       rafId = requestAnimationFrame(animateEnd);
     }
 
@@ -674,6 +783,7 @@
     function togglePause() {
       paused = !paused;
       if (paused) {
+        bgmPause();
         cancelAnimationFrame(rafId);
         ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
         ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
@@ -683,6 +793,7 @@
         ctx.font = `${Math.max(Math.round(BS * 0.5), 12)}px Arial`; ctx.fillStyle = '#888';
         ctx.fillText(hint, boardCanvas.width / 2, boardCanvas.height / 2 + BS * 1.4);
       } else {
+        bgmResume();
         lastTime = null; rafId = requestAnimationFrame(loop);
       }
     }
@@ -737,7 +848,9 @@
     }
 
     document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('bgmBtn').addEventListener('click', bgmToggle);
     bindTap('tStart', startGame);
+    bindTap('tBgm',   bgmToggle);
 
     // ── Resize / visualViewport change ────────────────────────
     function handleResize() {
