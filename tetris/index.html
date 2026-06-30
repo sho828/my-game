@@ -302,19 +302,106 @@
     function endGame() {
       gameRunning = false;
       cancelAnimationFrame(rafId);
-      drawBoard();
-      ctx.fillStyle = 'rgba(0,0,0,0.72)';
-      ctx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#f04060';
-      ctx.font      = 'bold 38px Arial';
-      ctx.fillText('GAME OVER', boardCanvas.width / 2, boardCanvas.height / 2 - 26);
-      ctx.fillStyle = '#ffffff';
-      ctx.font      = '20px Arial';
-      ctx.fillText(`スコア: ${score}`, boardCanvas.width / 2, boardCanvas.height / 2 + 16);
-      ctx.fillStyle = '#888';
-      ctx.font      = '14px Arial';
-      ctx.fillText('スタートボタンで再開', boardCanvas.width / 2, boardCanvas.height / 2 + 50);
+
+      const W = boardCanvas.width;
+      const H = boardCanvas.height;
+
+      // ボード上の全ブロックをパーティクルに変換
+      const particles = [];
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          if (board[r][c]) {
+            particles.push({
+              x:       c * BS,
+              y:       r * BS,
+              vx:      (Math.random() - 0.5) * 8,
+              vy:      Math.random() * -6 - 1,
+              color:   board[r][c],
+              alpha:   1,
+              gravity: 0.3,
+              angle:   0,
+              spin:    (Math.random() - 0.5) * 0.16,
+            });
+          }
+        }
+      }
+
+      let phase = 'flash';
+      let frame = 0;
+      const FLASH_FRAMES = 28;
+      const FALL_FRAMES  = 70;
+
+      function animateEnd() {
+        frame++;
+
+        if (phase === 'flash') {
+          drawBoard();
+          // 赤い点滅オーバーレイ
+          const alpha = Math.abs(Math.sin(frame * Math.PI / 7)) * 0.82;
+          ctx.fillStyle = `rgba(240,30,50,${alpha.toFixed(3)})`;
+          ctx.fillRect(0, 0, W, H);
+          if (frame >= FLASH_FRAMES) { phase = 'fall'; frame = 0; }
+
+        } else if (phase === 'fall') {
+          // 背景とグリッド
+          ctx.fillStyle = '#0a0a18';
+          ctx.fillRect(0, 0, W, H);
+          ctx.strokeStyle = '#14142a';
+          ctx.lineWidth   = 0.5;
+          for (let r = 0; r < ROWS; r++)
+            for (let c = 0; c < COLS; c++)
+              ctx.strokeRect(c * BS, r * BS, BS, BS);
+
+          // パーティクル更新＆描画
+          const t = frame / FALL_FRAMES;
+          for (const p of particles) {
+            if (p.alpha <= 0) continue;
+            p.vy    += p.gravity;
+            p.x     += p.vx;
+            p.y     += p.vy;
+            p.angle += p.spin;
+            p.alpha  = Math.max(0, 1 - t * 1.2);
+            const s  = BS - 2;
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.translate(p.x + BS / 2, p.y + BS / 2);
+            ctx.rotate(p.angle);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-s / 2, -s / 2, s, s);
+            ctx.fillStyle = 'rgba(255,255,255,0.22)';
+            ctx.fillRect(-s / 2, -s / 2, s, 5);
+            ctx.restore();
+          }
+          if (frame >= FALL_FRAMES) { phase = 'gameover'; frame = 0; }
+
+        } else {
+          // GAME OVER テキスト（パルスしながらフェードイン）
+          ctx.fillStyle = '#0a0a18';
+          ctx.fillRect(0, 0, W, H);
+          const fadeIn = Math.min(1, frame / 30);
+          const pulse  = (Math.sin(frame * 0.07) + 1) / 2;
+          ctx.save();
+          ctx.globalAlpha = fadeIn;
+          ctx.textAlign   = 'center';
+          ctx.shadowColor = '#f04060';
+          ctx.shadowBlur  = 12 + pulse * 30;
+          ctx.fillStyle   = '#f04060';
+          ctx.font        = 'bold 40px Arial';
+          ctx.fillText('GAME OVER', W / 2, H / 2 - 30);
+          ctx.shadowBlur  = 0;
+          ctx.fillStyle   = '#ffffff';
+          ctx.font        = '22px Arial';
+          ctx.fillText(`スコア: ${score}`, W / 2, H / 2 + 14);
+          ctx.fillStyle   = '#aaa';
+          ctx.font        = '14px Arial';
+          ctx.fillText('スタートボタンで再開', W / 2, H / 2 + 50);
+          ctx.restore();
+        }
+
+        rafId = requestAnimationFrame(animateEnd);
+      }
+
+      rafId = requestAnimationFrame(animateEnd);
     }
 
     // ── HUD ────────────────────────────────────────────────
