@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tetris Popup</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: #08081a;
+      background-image:
+        radial-gradient(ellipse at 20% 60%, rgba(0, 80, 180, 0.18) 0%, transparent 55%),
+        radial-gradient(ellipse at 80% 20%, rgba(120, 0, 200, 0.14) 0%, transparent 50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    /* subtle dot grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(rgba(0,240,240,0.07) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+
+    /* ── Hero ─────────────────────────────────────────── */
+    .hero {
+      text-align: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero h1 {
+      font-size: 80px;
+      letter-spacing: 22px;
+      color: #00f0f0;
+      text-shadow:
+        0 0 18px rgba(0,240,240,0.7),
+        0 0 60px rgba(0,240,240,0.25);
+      margin-bottom: 12px;
+      line-height: 1;
+    }
+
+    .hero p {
+      font-size: 13px;
+      color: #4a5060;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 52px;
+    }
+
+    #openBtn {
+      position: relative;
+      padding: 18px 60px;
+      background: transparent;
+      color: #fff;
+      border: 2px solid #e94560;
+      border-radius: 50px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      overflow: hidden;
+      transition: color 0.3s, box-shadow 0.35s;
+      box-shadow: 0 0 22px rgba(233,69,96,0.3), inset 0 0 18px rgba(233,69,96,0.04);
+    }
+    #openBtn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: #e94560;
+      transform: translateX(-102%);
+      transition: transform 0.35s cubic-bezier(0.65, 0, 0.35, 1);
+    }
+    #openBtn:hover::before { transform: translateX(0); }
+    #openBtn:hover { box-shadow: 0 0 44px rgba(233,69,96,0.55); }
+    #openBtn:active { opacity: 0.85; }
+    #openBtn span { position: relative; z-index: 1; }
+
+    /* ── Floating deco blocks ──────────────────────────── */
+    .deco {
+      position: fixed;
+      border-radius: 4px;
+      opacity: 0.07;
+      pointer-events: none;
+      animation: rise linear infinite;
+    }
+    @keyframes rise {
+      from { transform: translateY(110vh) rotate(0deg); }
+      to   { transform: translateY(-20vh) rotate(540deg); }
+    }
+
+    /* ── Overlay ───────────────────────────────────────── */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.72);
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s;
+      z-index: 100;
+    }
+    #overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    /* ── Popup ─────────────────────────────────────────── */
+    #popup {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      /* 画面外（下）からスライドイン */
+      transform: translate(-50%, calc(-50% + 120vh));
+      transition: transform 0.65s cubic-bezier(0.22, 1.35, 0.36, 1);
+      z-index: 101;
+      background: #0f0f23;
+      border: 1px solid #252545;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow:
+        0 32px 90px rgba(0,0,0,0.95),
+        0 0 0 1px rgba(0,240,240,0.07),
+        0 0 70px rgba(0,240,240,0.05);
+    }
+    #popup.active {
+      transform: translate(-50%, -50%);
+    }
+
+    /* ── Popup header ──────────────────────────────────── */
+    .popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 20px;
+      background: #0c0c1e;
+      border-bottom: 1px solid #1c1c36;
+    }
+
+    .popup-title {
+      font-size: 11px;
+      color: #00f0f0;
+      letter-spacing: 5px;
+      font-weight: bold;
+      text-shadow: 0 0 10px rgba(0,240,240,0.45);
+    }
+
+    .popup-close {
+      background: none;
+      border: 1px solid transparent;
+      color: #445;
+      font-size: 16px;
+      line-height: 1;
+      padding: 5px 8px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .popup-close:hover {
+      color: #e94560;
+      border-color: rgba(233,69,96,0.35);
+      background: rgba(233,69,96,0.08);
+    }
+
+    /* ── Game iframe ───────────────────────────────────── */
+    #gameFrame {
+      display: block;
+      border: none;
+      width: 544px;
+      height: 682px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Floating tetris-colored decorations -->
+  <div class="deco" style="width:30px;height:30px;background:#00f0f0;left: 6%;animation-duration:14s;animation-delay:  0s;"></div>
+  <div class="deco" style="width:30px;height:60px;background:#f0a000;left:13%;animation-duration:19s;animation-delay: -5s;"></div>
+  <div class="deco" style="width:60px;height:30px;background:#a000f0;left:22%;animation-duration:16s;animation-delay:-11s;"></div>
+  <div class="deco" style="width:30px;height:30px;background:#f0f000;left:62%;animation-duration:12s;animation-delay: -3s;"></div>
+  <div class="deco" style="width:30px;height:90px;background:#f00000;left:74%;animation-duration:20s;animation-delay: -8s;"></div>
+  <div class="deco" style="width:60px;height:30px;background:#0060f0;left:83%;animation-duration:15s;animation-delay:-13s;"></div>
+  <div class="deco" style="width:30px;height:60px;background:#00c000;left:91%;animation-duration:17s;animation-delay: -2s;"></div>
+  <div class="deco" style="width:30px;height:30px;background:#e94560;left:44%;animation-duration:21s;animation-delay: -7s;"></div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>TETRIS</h1>
+    <p>ポップアップでプレイ</p>
+    <button id="openBtn"><span>▶&nbsp; PLAY NOW</span></button>
+  </div>
+
+  <!-- Backdrop -->
+  <div id="overlay"></div>
+
+  <!-- Popup -->
+  <div id="popup" role="dialog" aria-modal="true" aria-label="Tetrisゲーム">
+    <div class="popup-header">
+      <span class="popup-title">TETRIS</span>
+      <button class="popup-close" id="closeBtn" aria-label="閉じる">✕</button>
+    </div>
+    <iframe id="gameFrame" src="index.html" title="Tetris" scrolling="no"></iframe>
+  </div>
+
+  <script>
+    const openBtn  = document.getElementById('openBtn');
+    const closeBtn = document.getElementById('closeBtn');
+    const overlay  = document.getElementById('overlay');
+    const popup    = document.getElementById('popup');
+    const frame    = document.getElementById('gameFrame');
+
+    function openPopup() {
+      overlay.classList.add('active');
+      popup.classList.add('active');
+      // iframe にフォーカスを渡してキー操作をすぐ有効化
+      popup.addEventListener('transitionend', () => frame.focus(), { once: true });
+    }
+
+    function closePopup() {
+      overlay.classList.remove('active');
+      popup.classList.remove('active');
+      openBtn.focus();
+    }
+
+    openBtn.addEventListener('click', openPopup);
+    closeBtn.addEventListener('click', closePopup);
+    overlay.addEventListener('click', closePopup);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closePopup();
+    });
+  </script>
+</body>
+</html>
