@@ -368,11 +368,12 @@
     const BGM_UNIT  = 0.1875; // 秒 / unit（四分音符 = 0.375 s = 160 BPM）
     const BGM_TOTAL = BGM_MELODY.reduce((s, [, b]) => s + b * BGM_UNIT, 0);
 
-    let audioCtx   = null;
-    let masterGain = null;
-    let bgmOn      = false;
-    let bgmMuted   = false;
-    let bgmLoopId  = null;
+    let audioCtx    = null;
+    let masterGain  = null;
+    let bgmOn       = false;
+    let bgmMuted    = false;
+    let bgmLoopId   = null;
+    let bgmNextTime = 0; // 前ループの終了時刻を引き継ぎ、継ぎ目のズレを防ぐ
 
     function audioInit() {
       if (!audioCtx) {
@@ -410,7 +411,8 @@
 
     function bgmSchedule() {
       if (!bgmOn || bgmMuted || !audioCtx) return;
-      const base = audioCtx.currentTime + 0.05;
+      // 前回のループ終了時刻がまだ未来なら継続し、途切れていたら現在時刻から再開する
+      const base = bgmNextTime > audioCtx.currentTime ? bgmNextTime : audioCtx.currentTime + 0.05;
       let t;
 
       t = base;
@@ -434,6 +436,7 @@
         t += d;
       }
 
+      bgmNextTime = base + BGM_TOTAL;
       bgmLoopId = setTimeout(bgmSchedule, (BGM_TOTAL - 0.25) * 1000);
     }
 
@@ -441,6 +444,7 @@
       audioInit();
       clearTimeout(bgmLoopId);
       bgmOn = true;
+      bgmNextTime = 0; // 新しいゲーム開始時は曲の頭から鳴らす
       bgmSchedule();
     }
 
