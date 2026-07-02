@@ -106,6 +106,11 @@
     }
     #startBtn:hover  { background: #c0304e; }
     #startBtn:active { transform: scale(0.97); }
+    #startBtn:disabled {
+      background: #5a2530;
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
 
     #bgmBtn {
       width: 100%;
@@ -264,6 +269,11 @@
         border-radius: 10px;
       }
       .t-btn.start:active { background: #c0304e; transform: scale(0.97); }
+      .t-btn.start:disabled {
+        background: #5a2530;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
     }
   </style>
 </head>
@@ -639,6 +649,7 @@
     // ── Game over animation ───────────────────────────────────
     function endGame() {
       gameRunning = false;
+      setStartEnabled(true);
       cancelAnimationFrame(rafId);
 
       const W = boardCanvas.width, H = boardCanvas.height;
@@ -905,7 +916,17 @@
     bindTap('tPause',  () => { if (gameRunning) togglePause(); });
 
     // ── Start ─────────────────────────────────────────────────
+    const startBtnEl = document.getElementById('startBtn');
+    const tStartEl   = document.getElementById('tStart');
+
+    function setStartEnabled(enabled) {
+      if (startBtnEl) startBtnEl.disabled = !enabled;
+      if (tStartEl)   tStartEl.disabled   = !enabled;
+    }
+
     function startGame() {
+      if (gameRunning) return; // 連打による多重スタート（BGMの重複再生など）を防ぐ
+      setStartEnabled(false);
       cancelAnimationFrame(rafId);
       setupSizes();
       init();
